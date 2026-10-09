@@ -1,20 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
   View, Text, TextInput, Button, FlatList, Image, 
-  StyleSheet, Alert, Modal, TouchableOpacity, Scrollable 
+  StyleSheet, Alert, Modal, TouchableOpacity
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
-
-const API_RECURSOS = 'https://6ac8213575a4ce3fe7227957.mockapi.io/recursos';
-
-interface Recurso {
-  id: string;
-  titulo: string;
-  descripcion: string;
-  tipo: string;
-  enlace: string;
-  imagen: string;
-}
+import { API_RECURSOS, fetchRecursos, Recurso } from '../services/recursos';
 
 export default function DocenteScreen() {
   const { logout, user } = useContext(AuthContext);
@@ -44,8 +34,7 @@ export default function DocenteScreen() {
 
   const obtenerRecursos = async () => {
     try {
-      const response = await fetch(API_RECURSOS);
-      const data = await response.json();
+      const data = await fetchRecursos();
       setRecursos(data);
       setRecursosFiltrados(data);
     } catch (error) {

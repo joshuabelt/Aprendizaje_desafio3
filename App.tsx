@@ -2,39 +2,15 @@ import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthContext, AuthProvider } from './context/AuthContext';
+import { RootStackParamList } from './navigation/types';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import { View, Text, Button, StyleSheet } from 'react-native';
+import DocenteScreen from './screens/Docente';
+import EstudianteScreen from './screens/Estudiante';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// 1. Pantalla provisional para el Docente (aquí harás el CRUD en el Paso 4)
-function DocenteDashboard() {
-  const { logout, user } = useContext(AuthContext);
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Panel de Docente 👨‍🏫</Text>
-      <Text>Bienvenido: {user?.correo}</Text>
-      <Text style={styles.subtitle}>Aquí podrás gestionar recursos (CRUD).</Text>
-      <Button title="Cerrar Sesión (Logout)" onPress={logout} color="red" />
-    </View>
-  );
-}
-
-// 2. Pantalla provisional para el Estudiante (aquí harás favoritos y rating en el Paso 5)
-function EstudianteDashboard() {
-  const { logout, user } = useContext(AuthContext);
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Lista de Recursos 👨‍🎓</Text>
-      <Text>Bienvenido: {user?.correo}</Text>
-      <Text style={styles.subtitle}>Aquí podrás buscar, ver favoritos y calificar.</Text>
-      <Button title="Cerrar Sesión (Logout)" onPress={logout} color="red" />
-    </View>
-  );
-}
-
-// 3. Componente de Navegación que evalúa los Roles
+// Componente de navegación que evalúa los roles
 function AppNavigator() {
   const { user } = useContext(AuthContext);
 
@@ -48,11 +24,11 @@ function AppNavigator() {
             <Stack.Screen name="Register" component={RegisterScreen} />
           </>
         ) : user.rol === 'Docente' ? (
-          // Si el rol es Docente, lo manda a su panel exclusivo
-          <Stack.Screen name="DocenteHome" component={DocenteDashboard} />
+          // Si el rol es Docente, lo manda a la pantalla CRUD
+          <Stack.Screen name="DocenteHome" component={DocenteScreen} />
         ) : (
-          // Si el rol es Estudiante, lo manda a su vista restringida
-          <Stack.Screen name="EstudianteHome" component={EstudianteDashboard} />
+          // El estudiante puede consultar la lista sin modificar los recursos
+          <Stack.Screen name="EstudianteHome" component={EstudianteScreen} />
         )}
       </Stack.Navigator>
     </NavigationContainer>
@@ -67,9 +43,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 10 },
-  subtitle: { fontSize: 14, color: 'gray', marginBottom: 20, textAlign: 'center' }
-});

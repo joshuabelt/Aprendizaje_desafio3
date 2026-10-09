@@ -2,13 +2,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useContext, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AuthContext, User } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/types';
 
 const API_URL = 'https://6ac8213575a4ce3fe7227957.mockapi.io/usuarios';
-
-type RootStackParamList = {
-  Login: undefined;
-  Register: undefined;
-};
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
