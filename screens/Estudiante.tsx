@@ -17,6 +17,7 @@ import { actualizarRecurso, fetchRecursos, Recurso } from '../services/recursos'
 
 export default function EstudianteScreen() {
   const { logout, user } = useContext(AuthContext);
+  const puedeInteractuar = user?.rol === 'Estudiante';
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [soloFavoritos, setSoloFavoritos] = useState(false);
@@ -76,7 +77,7 @@ export default function EstudianteScreen() {
     recurso: Recurso,
     cambios: Pick<Recurso, 'favoritos' | 'calificacion' | 'calificaciones'>,
   ) => {
-    if (!user || recursoActualizando) return;
+    if (!puedeInteractuar || !user || recursoActualizando) return;
 
     setRecursoActualizando(recurso.id);
     try {
@@ -92,7 +93,7 @@ export default function EstudianteScreen() {
   };
 
   const cambiarFavorito = (recurso: Recurso) => {
-    if (!user) return;
+    if (!puedeInteractuar || !user) return;
     const yaEsFavorito = recurso.favoritos.includes(user.id);
     const favoritos = yaEsFavorito
       ? recurso.favoritos.filter((usuarioId) => usuarioId !== user.id)
@@ -106,7 +107,7 @@ export default function EstudianteScreen() {
   };
 
   const calificarRecurso = (recurso: Recurso, valor: number) => {
-    if (!user) return;
+    if (!puedeInteractuar || !user) return;
     const calificaciones = recurso.calificaciones.filter(
       (calificacion) => calificacion.usuarioId !== user.id,
     );
@@ -153,10 +154,12 @@ export default function EstudianteScreen() {
         autoCapitalize="none"
         returnKeyType="search"
       />
-      <Button
-        title={soloFavoritos ? 'Mostrar todos los recursos' : 'Ver mis favoritos'}
-        onPress={() => setSoloFavoritos((actual) => !actual)}
-      />
+      {puedeInteractuar ? (
+        <Button
+          title={soloFavoritos ? 'Mostrar todos los recursos' : 'Ver mis favoritos'}
+          onPress={() => setSoloFavoritos((actual) => !actual)}
+        />
+      ) : null}
 
       {cargando ? (
         <View style={styles.message}>
@@ -192,44 +195,48 @@ export default function EstudianteScreen() {
                   ? `Promedio: ${item.calificacion.toFixed(1)} / 5 (${item.calificaciones.length} calificaciones)`
                   : 'Aún sin calificaciones'}
               </Text>
-              <View style={styles.ratingControls}>
-                {[1, 2, 3, 4, 5].map((valor) => {
-                  const miCalificacion = item.calificaciones.find(
-                    (calificacion) => calificacion.usuarioId === user?.id,
-                  )?.valor ?? 0;
+              {puedeInteractuar ? (
+                <>
+                  <View style={styles.ratingControls}>
+                    {[1, 2, 3, 4, 5].map((valor) => {
+                      const miCalificacion = item.calificaciones.find(
+                        (calificacion) => calificacion.usuarioId === user?.id,
+                      )?.valor ?? 0;
 
-                  return (
-                    <TouchableOpacity
-                      key={valor}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Calificar con ${valor} de 5 estrellas`}
-                      disabled={recursoActualizando !== null}
-                      onPress={() => calificarRecurso(item, valor)}
-                    >
-                      <Text style={[styles.star, valor <= miCalificacion && styles.selectedStar]}>
-                        ★
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-                {recursoActualizando === item.id ? (
-                  <ActivityIndicator size="small" color="#0066cc" />
-                ) : null}
-              </View>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={
-                  item.favoritos.includes(user?.id ?? '') ? 'Quitar de favoritos' : 'Agregar a favoritos'
-                }
-                disabled={recursoActualizando !== null}
-                onPress={() => cambiarFavorito(item)}
-              >
-                <Text style={styles.favoriteButton}>
-                  {item.favoritos.includes(user?.id ?? '')
-                    ? '♥ Quitar de favoritos'
-                    : '♡ Agregar a favoritos'}
-                </Text>
-              </TouchableOpacity>
+                      return (
+                        <TouchableOpacity
+                          key={valor}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Calificar con ${valor} de 5 estrellas`}
+                          disabled={recursoActualizando !== null}
+                          onPress={() => calificarRecurso(item, valor)}
+                        >
+                          <Text style={[styles.star, valor <= miCalificacion && styles.selectedStar]}>
+                            ★
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {recursoActualizando === item.id ? (
+                      <ActivityIndicator size="small" color="#0066cc" />
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      item.favoritos.includes(user?.id ?? '') ? 'Quitar de favoritos' : 'Agregar a favoritos'
+                    }
+                    disabled={recursoActualizando !== null}
+                    onPress={() => cambiarFavorito(item)}
+                  >
+                    <Text style={styles.favoriteButton}>
+                      {item.favoritos.includes(user?.id ?? '')
+                        ? '♥ Quitar de favoritos'
+                        : '♡ Agregar a favoritos'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
               <TouchableOpacity onPress={() => void abrirEnlace(item.enlace)}>
                 <Text style={styles.cardLink}>Abrir recurso</Text>
               </TouchableOpacity>

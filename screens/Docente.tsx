@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
-  View, Text, TextInput, Button, FlatList, Image, 
+  View, Text, TextInput, Button, FlatList, Image, ActivityIndicator,
   StyleSheet, Alert, Modal, TouchableOpacity
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
@@ -8,17 +8,19 @@ import { API_RECURSOS, fetchRecursos, Recurso } from '../services/recursos';
 
 export default function DocenteScreen() {
   const { logout, user } = useContext(AuthContext);
+  const puedeGestionar = user?.rol === 'Docente';
   const [recursos, setRecursos] = useState<Recurso[]>([]);
-  const [recursosFiltrados, setRecursosFiltrados] = useState<Recurso[]>([]);
   
   // Estados para búsqueda y filtrado
   const [busqueda, setBusqueda] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
 
   // Estados del Modal (para Agregar/Editar)
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   // Campos del formulario
   const [titulo, setTitulo] = useState('');
@@ -27,43 +29,56 @@ export default function DocenteScreen() {
   const [enlace, setEnlace] = useState('');
   const [imagen, setImagen] = useState('');
 
-  // Cargar recursos al iniciar
-  useEffect(() => {
-    obtenerRecursos();
-  }, []);
-
   const obtenerRecursos = async () => {
+    setActualizando(true);
     try {
       const data = await fetchRecursos();
       setRecursos(data);
-      setRecursosFiltrados(data);
-    } catch (error) {
-      Alert.alert("Error", "No se pudieron cargar los recursos.");
+    } catch {
+      Alert.alert("Error", "No se pudieron cargar los recursos. Intenta actualizar la lista.");
+    } finally {
+      setCargando(false);
+      setActualizando(false);
     }
   };
 
-  // Búsqueda avanzada por ID, título o tipo
   useEffect(() => {
-    let resultado = recursos;
+    let mounted = true;
 
-    if (busqueda.trim() !== '') {
-      const query = busqueda.toLowerCase();
-      resultado = resultado.filter(r => 
-        r.id.toLowerCase().includes(query) ||
-        r.titulo.toLowerCase().includes(query) ||
-        r.tipo.toLowerCase().includes(query)
-      );
-    }
+    const cargarInicialmente = async () => {
+      try {
+        const data = await fetchRecursos();
+        if (mounted) {
+          setRecursos(data);
+        }
+      } catch {
+        if (mounted) {
+          Alert.alert("Error", "No se pudieron cargar los recursos. Intenta actualizar la lista.");
+        }
+      } finally {
+        if (mounted) setCargando(false);
+      }
+    };
 
-    if (filtroTipo.trim() !== '') {
-      resultado = resultado.filter(r => r.tipo.toLowerCase() === filtroTipo.toLowerCase());
-    }
+    void cargarInicialmente();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-    setRecursosFiltrados(resultado);
-  }, [busqueda, filtroTipo, recursos]);
+  const recursosFiltrados = useMemo(() => {
+    const query = busqueda.trim().toLocaleLowerCase();
+    if (!query) return recursos;
+    return recursos.filter((recurso) =>
+      [recurso.id, recurso.titulo, recurso.tipo].some((valor) =>
+        valor.toLocaleLowerCase().includes(query),
+      ),
+    );
+  }, [busqueda, recursos]);
 
   // Limpiar formulario y abrir modal para CREAR
   const abrirModalCrear = () => {
+    if (!puedeGestionar) return;
     setIsEditing(false);
     setCurrentId(null);
     setTitulo('');
@@ -76,6 +91,7 @@ export default function DocenteScreen() {
 
   // Abrir modal prellenado para EDITAR (PUT)
   const abrirModalEditar = (recurso: Recurso) => {
+    if (!puedeGestionar) return;
     setIsEditing(true);
     setCurrentId(recurso.id);
     setTitulo(recurso.titulo);
@@ -88,7 +104,9 @@ export default function DocenteScreen() {
 
   // Guardar (POST o PUT)
   const guardarRecurso = async () => {
-    if (!titulo || !descripcion || !tipo || !enlace) {
+    if (!puedeGestionar) return;
+    if (guardando) return;
+    if (!titulo.trim() || !descripcion.trim() || !tipo.trim() || !enlace.trim()) {
       Alert.alert("Campos incompletos", "Por favor llena los campos obligatorios.");
       return;
     }
@@ -97,48 +115,50 @@ export default function DocenteScreen() {
       ? recursos.find((recurso) => recurso.id === currentId)
       : undefined;
     const recursoData = {
-      titulo,
-      descripcion,
-      tipo,
-      enlace,
-      imagen,
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      tipo: tipo.trim(),
+      enlace: enlace.trim(),
+      imagen: imagen.trim(),
       calificacion: recursoActual?.calificacion ?? 0,
       calificaciones: recursoActual?.calificaciones ?? [],
       favoritos: recursoActual?.favoritos ?? [],
     };
 
+    setGuardando(true);
     try {
+      let response: Response;
       if (isEditing && currentId) {
-        // Operación PUT (Actualizar)
-        const response = await fetch(`${API_RECURSOS}/${currentId}`, {
+        response = await fetch(`${API_RECURSOS}/${currentId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(recursoData),
         });
-        if (response.ok) {
-          Alert.alert("Éxito", "Recurso modificado correctamente.");
-        }
       } else {
-        // Operación POST (Crear)
-        const response = await fetch(API_RECURSOS, {
+        response = await fetch(API_RECURSOS, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(recursoData),
         });
-        if (response.ok) {
-          Alert.alert("Éxito", "Recurso agregado correctamente.");
-        }
+      }
+
+      if (!response.ok) {
+        throw new Error(`La API respondió con el estado ${response.status}.`);
       }
 
       setModalVisible(false);
-      obtenerRecursos();
-    } catch (error) {
-      Alert.alert("Error", "No se pudo guardar el recurso.");
+      Alert.alert("Éxito", isEditing ? "Recurso modificado correctamente." : "Recurso agregado correctamente.");
+      await obtenerRecursos();
+    } catch {
+      Alert.alert("Error", "No se pudo guardar el recurso. Revisa la conexión e inténtalo de nuevo.");
+    } finally {
+      setGuardando(false);
     }
   };
 
   // Operación DELETE (Eliminar con confirmación)
   const eliminarRecurso = (id: string) => {
+    if (!puedeGestionar) return;
     Alert.alert(
       "Confirmar eliminación",
       "¿Estás seguro de que deseas eliminar este recurso?",
@@ -150,12 +170,13 @@ export default function DocenteScreen() {
           onPress: async () => {
             try {
               const response = await fetch(`${API_RECURSOS}/${id}`, { method: 'DELETE' });
-              if (response.ok) {
-                Alert.alert("Éxito", "Recurso eliminado.");
-                obtenerRecursos();
+              if (!response.ok) {
+                throw new Error(`La API respondió con el estado ${response.status}.`);
               }
-            } catch (error) {
-              Alert.alert("Error", "No se pudo eliminar el recurso.");
+              Alert.alert("Éxito", "Recurso eliminado.");
+              await obtenerRecursos();
+            } catch {
+              Alert.alert("Error", "No se pudo eliminar el recurso. Revisa la conexión e inténtalo de nuevo.");
             }
           }
         }
@@ -180,34 +201,56 @@ export default function DocenteScreen() {
         onChangeText={setBusqueda}
       />
 
-      <Button title="+ Agregar Nuevo Recurso" onPress={abrirModalCrear} color="#0066cc" />
+      {puedeGestionar ? (
+        <Button title="+ Agregar Nuevo Recurso" onPress={abrirModalCrear} color="#0066cc" />
+      ) : null}
 
       {/* Lista de Recursos en Tarjetas */}
-      <FlatList 
-        data={recursosFiltrados}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
+      {cargando ? (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color="#0066cc" />
+          <Text>Cargando recursos...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recursosFiltrados}
+          keyExtractor={(item) => item.id}
+          refreshing={actualizando}
+          onRefresh={() => void obtenerRecursos()}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              {recursos.length === 0
+                ? "No hay recursos todavía. Usa «Agregar Nuevo Recurso» para crear el primero."
+                : "No se encontraron recursos con esa búsqueda."}
+            </Text>
+          }
+          renderItem={({ item }) => (
           <View style={styles.card}>
-            {item.imagen ? <Image source={{ uri: item.imagen }} style={styles.image} /> : null}
+            {/^https?:\/\//i.test(item.imagen) ? (
+              <Image source={{ uri: item.imagen }} style={styles.image} />
+            ) : null}
             <Text style={styles.cardTitle}>{item.titulo} (ID: {item.id})</Text>
             <Text style={styles.cardType}>Tipo: {item.tipo}</Text>
             <Text style={styles.cardDesc}>{item.descripcion}</Text>
             <Text style={styles.cardLink} numberOfLines={1}>{item.enlace}</Text>
 
-            <View style={styles.cardActions}>
-              <TouchableOpacity style={styles.btnEdit} onPress={() => abrirModalEditar(item)}>
-                <Text style={styles.btnText}>Editar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnDelete} onPress={() => eliminarRecurso(item.id)}>
-                <Text style={styles.btnText}>Eliminar</Text>
-              </TouchableOpacity>
-            </View>
+            {puedeGestionar ? (
+              <View style={styles.cardActions}>
+                <TouchableOpacity style={styles.btnEdit} onPress={() => abrirModalEditar(item)}>
+                  <Text style={styles.btnText}>Editar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnDelete} onPress={() => eliminarRecurso(item.id)}>
+                  <Text style={styles.btnText}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
-        )}
-      />
+          )}
+        />
+      )}
 
       {/* Modal para Crear / Editar */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      <Modal visible={modalVisible && puedeGestionar} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{isEditing ? "Modificar Recurso" : "Nuevo Recurso"}</Text>
@@ -219,8 +262,8 @@ export default function DocenteScreen() {
             <TextInput style={styles.input} placeholder="Imagen (URL opcional)" value={imagen} onChangeText={setImagen} autoCapitalize="none" />
 
             <View style={styles.modalButtons}>
-              <Button title="Cancelar" onPress={() => setModalVisible(false)} color="gray" />
-              <Button title={isEditing ? "Actualizar" : "Guardar"} onPress={guardarRecurso} color="#0066cc" />
+              <Button title="Cancelar" onPress={() => setModalVisible(false)} color="gray" disabled={guardando} />
+              <Button title={guardando ? "Guardando..." : isEditing ? "Actualizar" : "Guardar"} onPress={guardarRecurso} color="#0066cc" disabled={guardando} />
             </View>
           </View>
         </View>
@@ -249,5 +292,7 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
   input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 5, marginBottom: 12, backgroundColor: '#fff' },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  emptyText: { textAlign: 'center', color: '#666', padding: 24 },
 });

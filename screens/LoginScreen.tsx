@@ -15,22 +15,37 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleLogin = async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_URL}?correo=${correo}`);
+      const response = await fetch(`${API_URL}?correo=${encodeURIComponent(correo.trim())}`);
+      if (!response.ok) {
+        Alert.alert("Error", "No se pudo consultar el usuario. Inténtalo de nuevo.");
+        return;
+      }
+
       const users: User[] = await response.json();
 
       if (users.length > 0) {
         const usuarioEncontrado = users[0];
         
         if (usuarioEncontrado.password === password) {
-          Alert.alert("Bienvenido", `Iniciaste sesión como ${usuarioEncontrado.rol}`);
-          login(usuarioEncontrado);
+          const rolNormalizado = usuarioEncontrado.rol.trim().toLocaleLowerCase();
+          if (rolNormalizado !== 'docente' && rolNormalizado !== 'estudiante') {
+            Alert.alert("Error", "La cuenta no tiene un rol válido. Contacta al administrador.");
+            return;
+          }
+
+          const usuarioAutenticado: User = {
+            ...usuarioEncontrado,
+            rol: rolNormalizado === 'docente' ? 'Docente' : 'Estudiante',
+          };
+          Alert.alert("Bienvenido", `Iniciaste sesión como ${usuarioAutenticado.rol}`);
+          login(usuarioAutenticado);
         } else {
           Alert.alert("Error", "Contraseña incorrecta.");
         }
       } else {
         Alert.alert("Error", "El usuario no existe.");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "No se pudo conectar con el servidor.");
     }
   };
