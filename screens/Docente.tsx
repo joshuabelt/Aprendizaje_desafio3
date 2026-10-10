@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
-  View, Text, TextInput, Button, FlatList, Image, ActivityIndicator,
+  View, Text, TextInput, FlatList, Image, ActivityIndicator,
   StyleSheet, Alert, Modal, TouchableOpacity
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { API_RECURSOS, fetchRecursos, Recurso } from '../services/recursos';
+import FeedbackDialog, { FeedbackNotice } from '../components/FeedbackDialog';
+import colors from '../theme/colors';
 
 export default function DocenteScreen() {
   const { logout, user } = useContext(AuthContext);
@@ -21,6 +23,7 @@ export default function DocenteScreen() {
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackNotice | null>(null);
 
   // Campos del formulario
   const [titulo, setTitulo] = useState('');
@@ -35,7 +38,11 @@ export default function DocenteScreen() {
       const data = await fetchRecursos();
       setRecursos(data);
     } catch {
-      Alert.alert("Error", "No se pudieron cargar los recursos. Intenta actualizar la lista.");
+      setFeedback({
+        kind: 'error',
+        title: 'No se cargó el catálogo',
+        message: 'No pudimos obtener los recursos. Comprueba tu conexión e intenta actualizar la lista.',
+      });
     } finally {
       setCargando(false);
       setActualizando(false);
@@ -53,7 +60,11 @@ export default function DocenteScreen() {
         }
       } catch {
         if (mounted) {
-          Alert.alert("Error", "No se pudieron cargar los recursos. Intenta actualizar la lista.");
+          setFeedback({
+            kind: 'error',
+            title: 'No se cargó el catálogo',
+            message: 'No pudimos obtener los recursos. Comprueba tu conexión e intenta actualizar la lista.',
+          });
         }
       } finally {
         if (mounted) setCargando(false);
@@ -107,7 +118,11 @@ export default function DocenteScreen() {
     if (!puedeGestionar) return;
     if (guardando) return;
     if (!titulo.trim() || !descripcion.trim() || !tipo.trim() || !enlace.trim()) {
-      Alert.alert("Campos incompletos", "Por favor llena los campos obligatorios.");
+      setFeedback({
+        kind: 'error',
+        title: 'Faltan datos del recurso',
+        message: 'Completa el título, la descripción, el tipo y el enlace antes de guardar.',
+      });
       return;
     }
 
@@ -147,10 +162,20 @@ export default function DocenteScreen() {
       }
 
       setModalVisible(false);
-      Alert.alert("Éxito", isEditing ? "Recurso modificado correctamente." : "Recurso agregado correctamente.");
+      setFeedback({
+        kind: 'success',
+        title: isEditing ? '¡Recurso actualizado!' : '¡Recurso agregado!',
+        message: isEditing
+          ? 'Los cambios ya están disponibles en el catálogo de la escuela.'
+          : 'El nuevo recurso ya está disponible en el catálogo de aprendizaje.',
+      });
       await obtenerRecursos();
     } catch {
-      Alert.alert("Error", "No se pudo guardar el recurso. Revisa la conexión e inténtalo de nuevo.");
+      setFeedback({
+        kind: 'error',
+        title: 'No se guardó el recurso',
+        message: 'La operación no se completó. Comprueba los datos y la conexión, y vuelve a intentarlo.',
+      });
     } finally {
       setGuardando(false);
     }
@@ -173,10 +198,18 @@ export default function DocenteScreen() {
               if (!response.ok) {
                 throw new Error(`La API respondió con el estado ${response.status}.`);
               }
-              Alert.alert("Éxito", "Recurso eliminado.");
+              setFeedback({
+                kind: 'success',
+                title: 'Recurso eliminado',
+                message: 'El recurso se quitó correctamente del catálogo.',
+              });
               await obtenerRecursos();
             } catch {
-              Alert.alert("Error", "No se pudo eliminar el recurso. Revisa la conexión e inténtalo de nuevo.");
+              setFeedback({
+                kind: 'error',
+                title: 'No se eliminó el recurso',
+                message: 'No pudimos completar la eliminación. Comprueba tu conexión e inténtalo nuevamente.',
+              });
             }
           }
         }
@@ -187,13 +220,15 @@ export default function DocenteScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Panel Docente 👨‍🏫</Text>
-        <Button title="Cerrar Sesión" onPress={logout} color="red" />
+        <View style={styles.headerCopy}>
+          <Text style={styles.brand}>ETA · ESCUELA DE TECNOLOGÍA AVANZADA</Text>
+          <Text style={styles.title}>Panel docente</Text>
+          <Text style={styles.welcome}>Hola, {user?.nombre_usuario || user?.correo}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.8}>
+          <Text style={styles.logoutText}>Salir</Text>
+        </TouchableOpacity>
       </View>
-
-      <Text style={styles.welcome}>
-        Bienvenido, {user?.nombre_usuario || user?.correo}
-      </Text>
 
       {/* Barra de Búsqueda Avanzada */}
       <TextInput 
@@ -204,7 +239,10 @@ export default function DocenteScreen() {
       />
 
       {puedeGestionar ? (
-        <Button title="+ Agregar Nuevo Recurso" onPress={abrirModalCrear} color="#0066cc" />
+        <TouchableOpacity style={styles.createButton} onPress={abrirModalCrear} activeOpacity={0.85}>
+          <Text style={styles.createButtonIcon}>＋</Text>
+          <Text style={styles.createButtonText}>Agregar recurso</Text>
+        </TouchableOpacity>
       ) : null}
 
       {/* Lista de Recursos en Tarjetas */}
@@ -232,17 +270,17 @@ export default function DocenteScreen() {
               <Image source={{ uri: item.imagen }} style={styles.image} />
             ) : null}
             <Text style={styles.cardTitle}>{item.titulo} (ID: {item.id})</Text>
-            <Text style={styles.cardType}>Tipo: {item.tipo}</Text>
+            <Text style={styles.cardType}>{item.tipo.toLocaleUpperCase()}</Text>
             <Text style={styles.cardDesc}>{item.descripcion}</Text>
             <Text style={styles.cardLink} numberOfLines={1}>{item.enlace}</Text>
 
             {puedeGestionar ? (
               <View style={styles.cardActions}>
                 <TouchableOpacity style={styles.btnEdit} onPress={() => abrirModalEditar(item)}>
-                  <Text style={styles.btnText}>Editar</Text>
+                  <Text style={styles.btnEditText}>Editar recurso</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.btnDelete} onPress={() => eliminarRecurso(item.id)}>
-                  <Text style={styles.btnText}>Eliminar</Text>
+                  <Text style={styles.btnDeleteText}>Eliminar</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -252,49 +290,81 @@ export default function DocenteScreen() {
       )}
 
       {/* Modal para Crear / Editar */}
-      <Modal visible={modalVisible && puedeGestionar} animationType="slide" transparent={true}>
+      <Modal visible={modalVisible && puedeGestionar} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{isEditing ? "Modificar Recurso" : "Nuevo Recurso"}</Text>
 
-            <TextInput style={styles.input} placeholder="Título" value={titulo} onChangeText={setTitulo} />
-            <TextInput style={styles.input} placeholder="Descripción" value={descripcion} onChangeText={setDescripcion} multiline />
-            <TextInput style={styles.input} placeholder="Tipo (libro, video, artículo...)" value={tipo} onChangeText={setTipo} />
-            <TextInput style={styles.input} placeholder="Enlace (URL)" value={enlace} onChangeText={setEnlace} autoCapitalize="none" />
-            <TextInput style={styles.input} placeholder="Imagen (URL opcional)" value={imagen} onChangeText={setImagen} autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Título" placeholderTextColor="#A7B0BA" value={titulo} onChangeText={setTitulo} />
+            <TextInput style={styles.input} placeholder="Descripción" placeholderTextColor="#A7B0BA" value={descripcion} onChangeText={setDescripcion} multiline />
+            <TextInput style={styles.input} placeholder="Tipo (libro, video, artículo...)" placeholderTextColor="#A7B0BA" value={tipo} onChangeText={setTipo} />
+            <TextInput style={styles.input} placeholder="Enlace (URL)" placeholderTextColor="#A7B0BA" value={enlace} onChangeText={setEnlace} autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Imagen (URL opcional)" placeholderTextColor="#A7B0BA" value={imagen} onChangeText={setImagen} autoCapitalize="none" />
 
             <View style={styles.modalButtons}>
-              <Button title="Cancelar" onPress={() => setModalVisible(false)} color="gray" disabled={guardando} />
-              <Button title={guardando ? "Guardando..." : isEditing ? "Actualizar" : "Guardar"} onPress={guardarRecurso} color="#0066cc" disabled={guardando} />
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setModalVisible(false)}
+                disabled={guardando}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={guardarRecurso}
+                disabled={guardando}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.saveButtonText}>
+                  {guardando ? "Guardando..." : isEditing ? "Actualizar" : "Guardar"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+      <FeedbackDialog notice={feedback} onClose={() => setFeedback(null)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  welcome: { fontSize: 14, color: 'gray', marginBottom: 15 },
-  inputSearch: { borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 5, backgroundColor: 'white', marginBottom: 15 },
-  card: { backgroundColor: 'white', padding: 15, borderRadius: 8, marginVertical: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  image: { width: '100%', height: 120, borderRadius: 5, marginBottom: 10 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  cardType: { fontSize: 12, fontWeight: 'bold', color: '#0066cc', marginBottom: 5 },
-  cardDesc: { fontSize: 14, color: '#666', marginBottom: 5 },
-  cardLink: { fontSize: 12, color: 'blue', textDecorationLine: 'underline', marginBottom: 10 },
-  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  btnEdit: { backgroundColor: '#f0ad4e', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5 },
-  btnDelete: { backgroundColor: '#d9534f', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5 },
-  btnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
-  modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 20 },
-  modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, borderRadius: 5, marginBottom: 12, backgroundColor: '#fff' },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  container: { flex: 1, padding: 20, backgroundColor: colors.background, paddingTop: 54 },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: colors.navy, borderRadius: 20, padding: 18, marginBottom: 18,
+  },
+  headerCopy: { flex: 1, paddingRight: 8 },
+  brand: { color: colors.cyan, fontSize: 9, fontWeight: '800', letterSpacing: 1.1, marginBottom: 8 },
+  title: { fontSize: 23, fontWeight: '800', color: colors.surface },
+  welcome: { fontSize: 13, color: '#B6C8D8', marginTop: 5 },
+  logoutButton: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, backgroundColor: '#203A54' },
+  logoutText: { color: colors.surface, fontSize: 12, fontWeight: '700' },
+  inputSearch: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.surface, marginBottom: 12, color: colors.text },
+  createButton: { flexDirection: 'row', minHeight: 50, backgroundColor: colors.blue, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  createButtonIcon: { color: colors.surface, fontSize: 22, fontWeight: '500', marginRight: 8, marginTop: -2 },
+  createButtonText: { color: colors.surface, fontSize: 15, fontWeight: '800' },
+  card: { backgroundColor: colors.surface, padding: 16, borderRadius: 16, marginVertical: 8, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 3, borderWidth: 1, borderColor: '#E8EEF4' },
+  image: { width: '100%', height: 150, borderRadius: 10, marginBottom: 12 },
+  cardTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  cardType: { fontSize: 10, fontWeight: '800', color: colors.blue, letterSpacing: 1, marginTop: 8, marginBottom: 5 },
+  cardDesc: { fontSize: 14, color: colors.muted, lineHeight: 20, marginBottom: 6 },
+  cardLink: { fontSize: 12, color: colors.blue, textDecorationLine: 'underline', marginBottom: 12 },
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 9, borderTopWidth: 1, borderTopColor: '#E8EEF4', paddingTop: 12 },
+  btnEdit: { backgroundColor: '#EAF4FC', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 9 },
+  btnDelete: { backgroundColor: '#FFF0F0', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 9 },
+  btnEditText: { color: colors.blue, fontWeight: '800', fontSize: 12 },
+  btnDeleteText: { color: colors.danger, fontWeight: '800', fontSize: 12 },
+  modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(9,23,39,0.72)', padding: 20 },
+  modalContent: { backgroundColor: '#101418', padding: 22, borderRadius: 20, borderWidth: 1, borderColor: '#303943' },
+  modalTitle: { fontSize: 21, fontWeight: '800', color: '#FFFFFF', marginBottom: 18 },
+  input: { borderWidth: 1, borderColor: '#3B4652', padding: 12, borderRadius: 11, marginBottom: 12, backgroundColor: '#1B222A', color: '#FFFFFF' },
+  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 },
+  cancelButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, borderRadius: 10, borderWidth: 1, borderColor: '#56616D' },
+  cancelButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  saveButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 18, borderRadius: 10, backgroundColor: colors.cyan },
+  saveButtonText: { color: '#091727', fontWeight: '800' },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
-  emptyText: { textAlign: 'center', color: '#666', padding: 24 },
+  emptyText: { textAlign: 'center', color: colors.muted, padding: 24 },
 });
