@@ -93,7 +93,19 @@ export default function DocenteScreen() {
       return;
     }
 
-    const recursoData = { titulo, descripcion, tipo, enlace, imagen };
+    const recursoActual = isEditing
+      ? recursos.find((recurso) => recurso.id === currentId)
+      : undefined;
+    const recursoData = {
+      titulo,
+      descripcion,
+      tipo,
+      enlace,
+      imagen,
+      calificacion: recursoActual?.calificacion ?? 0,
+      calificaciones: recursoActual?.calificaciones ?? [],
+      favoritos: recursoActual?.favoritos ?? [],
+    };
 
     try {
       if (isEditing && currentId) {
