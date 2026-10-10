@@ -2,12 +2,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { RootStackParamList } from '../navigation/types';
-
-const API_URL = 'https://6ac8213575a4ce3fe7227957.mockapi.io/usuarios';
+import { API_USUARIOS, fetchUsuarios } from '../services/usuarios';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export default function RegisterScreen({ navigation }: Props) {
+  const [nombreUsuario, setNombreUsuario] = useState<string>('');
   const [correo, setCorreo] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [rol, setRol] = useState<'Estudiante' | 'Docente'>('Estudiante');
@@ -18,25 +18,57 @@ export default function RegisterScreen({ navigation }: Props) {
   };
 
   const handleRegister = async (): Promise<void> => {
+    const nombreUsuarioLimpio = nombreUsuario.trim();
+    const correoLimpio = correo.trim();
+
+    if (!nombreUsuarioLimpio || !correoLimpio || !password) {
+      Alert.alert("Datos incompletos", "Ingresa tu nombre de usuario, correo y contraseña.");
+      return;
+    }
+
     if (!validarPassword(password)) {
       Alert.alert("Contraseña inválida", "Debe tener mínimo 12 caracteres, una mayúscula, una minúscula, un número y un carácter especial (!@#$%^&*).");
       return;
     }
 
     try {
-      const response = await fetch(API_URL, {
+      const usuarios = await fetchUsuarios();
+      const nombreExiste = usuarios.some(
+        (usuario) =>
+          usuario.nombre_usuario?.trim().toLocaleLowerCase() ===
+          nombreUsuarioLimpio.toLocaleLowerCase(),
+      );
+      const correoExiste = usuarios.some(
+        (usuario) => usuario.correo.trim().toLocaleLowerCase() === correoLimpio.toLocaleLowerCase(),
+      );
+
+      if (nombreExiste) {
+        Alert.alert("Nombre de usuario ocupado", "Elige otro nombre de usuario.");
+        return;
+      }
+      if (correoExiste) {
+        Alert.alert("Correo registrado", "Ya existe una cuenta con ese correo.");
+        return;
+      }
+
+      const response = await fetch(API_USUARIOS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ correo, password, rol })
+        body: JSON.stringify({
+          nombre_usuario: nombreUsuarioLimpio,
+          correo: correoLimpio,
+          password,
+          rol,
+        })
       });
 
       if (response.ok) {
         Alert.alert("Éxito", "Usuario registrado correctamente.");
         navigation.navigate('Login');
       } else {
-        Alert.alert("Error", "Hubo un problema al registrar.");
+        Alert.alert("Error", `No se pudo registrar el usuario (estado ${response.status}).`);
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Revisa tu conexión a internet.");
     }
   };
@@ -45,6 +77,15 @@ export default function RegisterScreen({ navigation }: Props) {
     <View style={styles.container}>
       <Text style={styles.title}>Registro de Usuario</Text>
       
+      <TextInput
+        style={styles.input}
+        placeholder="Nombre de usuario"
+        value={nombreUsuario}
+        onChangeText={setNombreUsuario}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+
       <TextInput 
         style={styles.input} 
         placeholder="Correo electrónico" 

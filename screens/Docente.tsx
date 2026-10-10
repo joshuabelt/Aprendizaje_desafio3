@@ -191,7 +191,9 @@ export default function DocenteScreen() {
         <Button title="Cerrar Sesión" onPress={logout} color="red" />
       </View>
 
-      <Text style={styles.welcome}>Bienvenido, {user?.correo}</Text>
+      <Text style={styles.welcome}>
+        Bienvenido, {user?.nombre_usuario || user?.correo}
+      </Text>
 
       {/* Barra de Búsqueda Avanzada */}
       <TextInput 

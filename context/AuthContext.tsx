@@ -3,6 +3,7 @@ import { createContext, ReactNode, useState } from 'react';
 // Definimos la estructura del usuario
 export interface User {
   id: string;
+  nombre_usuario?: string;
   correo: string;
   password?: string;
   rol: 'Estudiante' | 'Docente';

@@ -141,7 +141,9 @@ export default function EstudianteScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Lista de Recursos</Text>
-          <Text style={styles.welcome}>Bienvenido, {user?.correo}</Text>
+          <Text style={styles.welcome}>
+            Bienvenido, {user?.nombre_usuario || user?.correo}
+          </Text>
         </View>
         <Button title="Cerrar sesión" onPress={logout} color="#b42318" />
       </View>

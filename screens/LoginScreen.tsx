@@ -3,48 +3,53 @@ import { useContext, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AuthContext, User } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/types';
-
-const API_URL = 'https://6ac8213575a4ce3fe7227957.mockapi.io/usuarios';
+import { fetchUsuarios } from '../services/usuarios';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [correo, setCorreo] = useState<string>('');
+  const [identificador, setIdentificador] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const { login } = useContext(AuthContext);
 
   const handleLogin = async (): Promise<void> => {
+    const identificadorLimpio = identificador.trim();
+    if (!identificadorLimpio || !password) {
+      Alert.alert("Datos incompletos", "Ingresa tu nombre de usuario o correo y contraseña.");
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_URL}?correo=${encodeURIComponent(correo.trim())}`);
-      if (!response.ok) {
-        Alert.alert("Error", "No se pudo consultar el usuario. Inténtalo de nuevo.");
+      const usuarios = await fetchUsuarios();
+      const identificadorNormalizado = identificadorLimpio.toLocaleLowerCase();
+      const usuarioEncontrado = usuarios.find(
+        (usuario) =>
+          usuario.nombre_usuario?.trim().toLocaleLowerCase() === identificadorNormalizado ||
+          usuario.correo.trim().toLocaleLowerCase() === identificadorNormalizado,
+      );
+
+      if (!usuarioEncontrado) {
+        Alert.alert("Error", "No existe una cuenta con ese nombre de usuario o correo.");
         return;
       }
 
-      const users: User[] = await response.json();
-
-      if (users.length > 0) {
-        const usuarioEncontrado = users[0];
-        
-        if (usuarioEncontrado.password === password) {
-          const rolNormalizado = usuarioEncontrado.rol.trim().toLocaleLowerCase();
-          if (rolNormalizado !== 'docente' && rolNormalizado !== 'estudiante') {
-            Alert.alert("Error", "La cuenta no tiene un rol válido. Contacta al administrador.");
-            return;
-          }
-
-          const usuarioAutenticado: User = {
-            ...usuarioEncontrado,
-            rol: rolNormalizado === 'docente' ? 'Docente' : 'Estudiante',
-          };
-          Alert.alert("Bienvenido", `Iniciaste sesión como ${usuarioAutenticado.rol}`);
-          login(usuarioAutenticado);
-        } else {
-          Alert.alert("Error", "Contraseña incorrecta.");
-        }
-      } else {
-        Alert.alert("Error", "El usuario no existe.");
+      if (usuarioEncontrado.password !== password) {
+        Alert.alert("Error", "Contraseña incorrecta.");
+        return;
       }
+
+      const rolNormalizado = usuarioEncontrado.rol.trim().toLocaleLowerCase();
+      if (rolNormalizado !== 'docente' && rolNormalizado !== 'estudiante') {
+        Alert.alert("Error", "La cuenta no tiene un rol válido. Contacta al administrador.");
+        return;
+      }
+
+      const usuarioAutenticado: User = {
+        ...usuarioEncontrado,
+        rol: rolNormalizado === 'docente' ? 'Docente' : 'Estudiante',
+      };
+      Alert.alert("Bienvenido", `Iniciaste sesión como ${usuarioAutenticado.rol}`);
+      login(usuarioAutenticado);
     } catch {
       Alert.alert("Error", "No se pudo conectar con el servidor.");
     }
@@ -56,10 +61,11 @@ export default function LoginScreen({ navigation }: Props) {
       
       <TextInput 
         style={styles.input} 
-        placeholder="Correo electrónico" 
-        value={correo} 
-        onChangeText={setCorreo} 
+        placeholder="Nombre de usuario o correo electrónico"
+        value={identificador}
+        onChangeText={setIdentificador}
         autoCapitalize="none"
+        autoCorrect={false}
       />
       
       <TextInput 
